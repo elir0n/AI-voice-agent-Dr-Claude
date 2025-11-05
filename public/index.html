@@ -21,6 +21,10 @@
     const responseAudio = document.getElementById("responseAudio");
     let recorder;
 
+    // 🧠 מזהה ייחודי למשתמש (נשמר מקומית גם אם מרעננים את העמוד)
+    const sessionId = localStorage.getItem("sessionId") || crypto.randomUUID();
+    localStorage.setItem("sessionId", sessionId);
+
     recordBtn.onclick = async () => {
       if (recordBtn.textContent.includes("התחל")) {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -33,8 +37,10 @@
         recorder.stop();
         recordBtn.textContent = "🎙️ התחל לדבר";
         recorder.exportWAV(async (blob) => {
+          // שולחים גם את ה-sessionId לשרת
           const formData = new FormData();
           formData.append("audio", blob, "input.wav");
+          formData.append("sessionId", sessionId);
 
           const res = await fetch("/voice", { method: "POST", body: formData });
           const audioBlob = await res.blob();

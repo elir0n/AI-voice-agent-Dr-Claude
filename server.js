@@ -8,6 +8,9 @@ import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "ffmpeg-static";
 import { generateAvailableAppointments } from "./src/services/appointmentService.js";
 import { saveLog, getLogs } from "./src/services/logService.js";
+import { agentPrompt } from "./src/rules/agentRules.js";
+import { detectLanguage } from "./src/utils/languageDetection.js";
+import { textToSpeech } from "./src/services/ttsService.js";
 
 dotenv.config();
 const app = express();
@@ -19,6 +22,9 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 const upload = multer({ dest: "uploads/" });
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const PORT = process.env.PORT || 3000;
+
+// 🧠 זיכרון זמני לשיחות פעילות
+const sessions = new Map();
 
 if (!fs.existsSync("responses")) fs.mkdirSync("responses");
 
@@ -32,12 +38,13 @@ app.get("/logs", (req, res) => {
   res.json(rows);
 });
 
-
 app.post("/voice", upload.single("audio"), async (req, res) => {
   const inputPath = req.file.path;
   const outputPath = `${inputPath}.mp3`;
+  const sessionId = req.body.sessionId || "anonymous";
 
   try {
+    // 🎧 Convert to mp3
     await new Promise((resolve, reject) => {
       ffmpeg(inputPath)
         .toFormat("mp3")
@@ -52,59 +59,43 @@ app.post("/voice", upload.single("audio"), async (req, res) => {
       model: "whisper-1"
     });
 
-    const text = transcription.text;
+    const text = transcription.text.trim();
     console.log("🗣️ דיבור → טקסט:", text);
 
-    // 🧠 Detect language with GPT
-    const detectLangResp = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: "Detect the language of the following text. Reply only with a two-letter code (he, en, fr)." },
-        { role: "user", content: text }
-      ]
-    });
+    // 🧠 Detect language
+    const detectedLang = await detectLanguage(text);
 
-    let detectedLang = detectLangResp.choices[0].message.content.trim().toLowerCase();
-    if (!["he", "en", "fr"].includes(detectedLang)) detectedLang = "he"; // fallback
-    console.log(`🌐 שפה שזוהתה: ${detectedLang}`);
+    // ✅ ניהול שיחה לפי session
+    if (!sessions.has(sessionId)) {
+      sessions.set(sessionId, [
+        { role: "system", content: agentPrompt },
+        { role: "assistant", content: "שלום, אני העוזר הקולי של ד\"ר קלוד פיקאר. איך אפשר לעזור?" }
+      ]);
+    }
 
-    // 🧠 Choose language context
-    const systemPrompts = {
-      he: "אתה העוזר הקולי של ד\"ר קלוד פיקאר. דבר בעברית בלבד.",
-      en: "You are Dr. Claude Picard's voice assistant. Reply only in English.",
-      fr: "Vous êtes l'assistant vocal du Dr Claude Picard. Répondez uniquement en français."
-    };
-    const prompt = systemPrompts[detectedLang];
+    // מוסיפים את הודעת המשתמש לשיחה
+    const conversation = sessions.get(sessionId);
+    conversation.push({ role: "user", content: text });
 
-    const availableAppointments = generateAvailableAppointments();
+    // שולחים ל-GPT את כל ההיסטוריה
     const completion = await client.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-        {
-        role: "system",
-        content:
-            "אתה עוזר קולי במרפאת ד\"ר קלוד פיקאר. יש לך גישה לרשימת תורים. השתמש בה כדי להציע תורים מתאימים."
-        },
-        { role: "user", content: text },
-        { role: "assistant", content: JSON.stringify(availableAppointments.slice(0, 10)) }
-    ]
+      model: "gpt-4o",
+      messages: conversation,
     });
 
-    const reply = completion.choices[0].message.content;
-    console.log("GPT:", reply);
+    const reply = completion.choices[0].message.content.trim();
+    console.log("🤖 GPT:", reply);
 
-    // שמירת הלוג
+    // מוסיפים את תגובת הסוכן להיסטוריה
+    conversation.push({ role: "assistant", content: reply });
+
+    // 💾 Save log
     saveLog(detectedLang, text, reply);
 
-    // 🔊 Text → Speech (voice in same language)
-    const ttsResponse = await client.audio.speech.create({
-      model: "gpt-4o-mini-tts",
-      voice: "alloy",
-      input: reply
-    });
+    // 🔊 Text → Speech
+    const audioBuffer = await textToSpeech(reply, outputPath);
 
-    const audioBuffer = Buffer.from(await ttsResponse.arrayBuffer());
-
+    // 🕒 Save response locally
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const responseAudioPath = `responses/response_${timestamp}.mp3`;
     const responseTextPath = `responses/response_${timestamp}.txt`;
@@ -122,7 +113,7 @@ app.post("/voice", upload.single("audio"), async (req, res) => {
     console.error(error);
     res.status(500).send("Error processing voice request");
   } finally {
-    fs.unlinkSync(inputPath);
+    if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
     if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
   }
 });
