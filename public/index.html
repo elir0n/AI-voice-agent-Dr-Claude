@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+  <meta charset="UTF-8" />
+  <title>Voice Agent Hebrew Demo</title>
+  <script src="https://cdn.jsdelivr.net/gh/mattdiamond/Recorderjs@master/dist/recorder.js"></script>
+  <style>
+    body { font-family: Arial; text-align: center; margin-top: 100px; }
+    button { font-size: 20px; padding: 15px 25px; border-radius: 12px; background-color: #0078D7; color: white; border: none; cursor: pointer; }
+    button:disabled { background-color: gray; }
+    audio { margin-top: 30px; width: 300px; }
+  </style>
+</head>
+<body>
+  <h2>🎤 דבר עם הסוכן של ד"ר קלוד פיקאר</h2>
+  <button id="recordBtn">🎙️ התחל לדבר</button>
+  <audio id="responseAudio" controls></audio>
+
+  <script>
+    const recordBtn = document.getElementById("recordBtn");
+    const responseAudio = document.getElementById("responseAudio");
+    let recorder;
+
+    recordBtn.onclick = async () => {
+      if (recordBtn.textContent.includes("התחל")) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const audioContext = new AudioContext();
+        const input = audioContext.createMediaStreamSource(stream);
+        recorder = new Recorder(input, { numChannels: 1 });
+        recorder.record();
+        recordBtn.textContent = "⏹️ עצור הקלטה";
+      } else {
+        recorder.stop();
+        recordBtn.textContent = "🎙️ התחל לדבר";
+        recorder.exportWAV(async (blob) => {
+          const formData = new FormData();
+          formData.append("audio", blob, "input.wav");
+
+          const res = await fetch("/voice", { method: "POST", body: formData });
+          const audioBlob = await res.blob();
+          const audioUrl = URL.createObjectURL(audioBlob);
+          responseAudio.src = audioUrl;
+          responseAudio.play();
+        });
+      }
+    };
+  </script>
+</body>
+</html>
