@@ -1,32 +1,42 @@
 import Database from "better-sqlite3";
 import fs from "fs";
 
-// נוודא שהתיקייה data קיימת
-if (!fs.existsSync("data")) fs.mkdirSync("data");
+const DATA_DIR = "data";
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
 
-// פתיחת/יצירת בסיס הנתונים
-const db = new Database("data/data.db");
+const db = new Database(`${DATA_DIR}/data.db`);
 
 // יצירת טבלה אם לא קיימת
 db.prepare(`
   CREATE TABLE IF NOT EXISTS logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     date TEXT,
+    sessionId TEXT,
     language TEXT,
     userText TEXT,
-    reply TEXT
+    reply TEXT,
+    inputAudio TEXT,
+    outputAudio TEXT
   )
 `).run();
 
-// פונקציה לשמירת רשומה
-export function saveLog(lang, userText, reply) {
+// ✅ פונקציה לשמירת לוג מפורט
+export function saveLog({ sessionId, language, userText, reply, inputAudio, outputAudio }) {
   db.prepare(`
-    INSERT INTO logs (date, language, userText, reply)
-    VALUES (?, ?, ?, ?)
-  `).run(new Date().toISOString(), lang, userText, reply);
+    INSERT INTO logs (date, sessionId, language, userText, reply, inputAudio, outputAudio)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    new Date().toISOString(),
+    sessionId,
+    language,
+    userText,
+    reply,
+    inputAudio,
+    outputAudio
+  );
 }
 
-// פונקציה לקריאת הלוגים (למשל להצגה ב-admin)
+// ✅ פונקציה לשליפת הלוגים האחרונים
 export function getLogs(limit = 50) {
   return db.prepare("SELECT * FROM logs ORDER BY id DESC LIMIT ?").all(limit);
 }

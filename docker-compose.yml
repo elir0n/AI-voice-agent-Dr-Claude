@@ -1,0 +1,32 @@
+version: "3.9"
+
+services:
+  agent:
+    build: .
+    container_name: voice-agent
+    restart: unless-stopped
+    ports:
+      - "3000:3000"     # API הראשי שלך
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - UPLOAD_DIR=/app/uploads
+      - RESPONSES_DIR=/app/responses
+    volumes:
+      - ./uploads:/app/uploads
+      - ./responses:/app/responses
+      - ./data:/app/data
+    # אם תוסיף בהמשך Asterisk, תוכל להגדיר פה רשת משותפת
+
+# בעתיד תוכל להוסיף גם:
+#   asterisk:
+#     image: asterisk:latest
+#     container_name: asterisk
+#     ports:
+#       - "5060:5060/udp"
+#       - "10000-20000:10000-20000/udp"
+#     networks:
+#       - agent-network
+
+# networks:
+#   agent-network:
+#     driver: bridge
