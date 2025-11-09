@@ -6,7 +6,7 @@ services:
     container_name: voice-agent
     restart: unless-stopped
     ports:
-      - "3000:3000"     # API הראשי שלך
+      - "3000:3000"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - UPLOAD_DIR=/app/uploads
@@ -15,18 +15,21 @@ services:
       - ./uploads:/app/uploads
       - ./responses:/app/responses
       - ./data:/app/data
-    # אם תוסיף בהמשך Asterisk, תוכל להגדיר פה רשת משותפת
+    networks:
+      - agent-network
 
-# בעתיד תוכל להוסיף גם:
-#   asterisk:
-#     image: asterisk:latest
-#     container_name: asterisk
-#     ports:
-#       - "5060:5060/udp"
-#       - "10000-20000:10000-20000/udp"
-#     networks:
-#       - agent-network
+  asterisk:
+    image: asterisk:latest
+    container_name: asterisk
+    restart: unless-stopped
+    ports:
+      - "5060:5060/udp"           # SIP signalling
+      - "10000-20000:10000-20000/udp"  # RTP (audio)
+    volumes:
+      - ./asterisk_conf:/etc/asterisk  # נגדיר תצורות משלך
+    networks:
+      - agent-network
 
-# networks:
-#   agent-network:
-#     driver: bridge
+networks:
+  agent-network:
+    driver: bridge
