@@ -23,7 +23,7 @@ Patients can call the clinic, speak naturally, and the AI will:
 - 🧠 **Natural conversation** powered by GPT-4o  
 - 🗣️ **Speech recognition** using OpenAI Whisper  
 - 🔊 **Text-to-speech** output (Hebrew / English / French)  
-- 📅 **Automated appointment logic** via mock Odoro API  
+- 📅 **Automated appointment logic** via Odoro API  
 - 💳 **Health-fund billing awareness** (Maccabi, Clalit, Meuhedet, Leumit, private)  
 - 🏥 **Built-in clinic scheduling rules** (days, hours, costs, eligibility)  
 - 🔒 **Privacy-first**: only minimal data stored (no medical records)  
@@ -41,7 +41,7 @@ Patients can call the clinic, speak naturally, and the AI will:
 | AI Engine | OpenAI GPT-4o |
 | Speech-to-Text | Whisper-1 |
 | Text-to-Speech | OpenAI TTS |
-| Scheduling | Odoro Mock API (local) |
+| Scheduling | Odoro API |
 | Telephony | Asterisk + AGI |
 | Deployment | Docker / Docker Compose |
 | Docs & Testing | Swagger (OpenAPI) + Postman |
@@ -51,32 +51,32 @@ Patients can call the clinic, speak naturally, and the AI will:
 ## 🧠 Project Structure
 AI-voice-agent-Dr-Claude/
 ├── src/
-│ ├── services/
-│ │ ├── appointmentService.js
-│ │ ├── logService.js
-│ │ ├── odoroService.js
-│ │ ├── ttsService.js
-│ │ └── ...
-│ ├── rules/
-│ │ └── agentRules.js
-│ └── utils/
-│ └── languageDetection.js
+│   ├── services/
+│   │   ├── appointmentService.js
+│   │   ├── logService.js
+│   │   ├── odoroService.js
+│   │   └── ttsService.js
+│   ├── rules/
+│   │   └── agentRules.js
+│   └── utils/
+│       └── languageDetection.js
 │
 ├── asterisk_conf/
-│ └── extensions.conf
+│   └── extensions.conf
 │
 ├── docs/
-│ ├── openapi.yaml
-│ └── postman_collection.json
+│   ├── openapi.yaml
+│   └── postman_collection.json
 │
 ├── public/
-│ └── demo.html
+│   └── demo.html
 │
 ├── Dockerfile
 ├── docker-compose.yml
 ├── server.js
 ├── package.json
 └── README.md
+
 
 
 ---
@@ -87,7 +87,7 @@ AI-voice-agent-Dr-Claude/
 2. The agent records and transcribes the caller’s voice (Whisper).  
 3. The text is analyzed by GPT-4o using `agentRules.js`.  
 4. Based on detected intent:  
-   - **Book** → fetch slots from Odoro mock API  
+   - **Book** → fetch slots from Odoro API  
    - **Cancel** → confirm and cancel booking  
    - **Reschedule** → offer alternate times  
 5. The reply is converted to speech and played back to the caller.  
@@ -97,13 +97,14 @@ AI-voice-agent-Dr-Claude/
 
 # 🧭 Odoro API
 
-The mock server simulates Odoro scheduling behavior:
+The server of Odoro scheduling behavior:
 
 | Endpoint | Description |
 |-----------|--------------|
 | `GET /api/odoro/availability` | Get available slots |
 | `POST /api/odoro/appointments/book` | Book an appointment |
 | `POST /api/odoro/appointments/{id}/cancel` | Cancel existing appointment |
+| `PUT  /api/odoro/appointments/{id}/reschedule | reschedule existing appointment |
 
 Configuration is in `src/services/odoroService.js`.
 
@@ -111,7 +112,7 @@ Configuration is in `src/services/odoroService.js`.
 
 # 🔒 Privacy & Security
 
-- Only minimal personal info is stored: name, phone, date of birth, health fund.  
+- Only minimal personal info is stored: id, name, phone, date of birth, health fund.  
 - No diagnoses or medical notes are ever saved.  
 - All API keys are stored securely via `.env`.  
 - Communication with OpenAI and APIs is HTTPS-only.
