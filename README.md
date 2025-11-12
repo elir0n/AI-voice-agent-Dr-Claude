@@ -106,7 +106,7 @@ The server of Odoro scheduling behavior:
 | `GET /api/odoro/availability` | Get available slots |
 | `POST /api/odoro/appointments/book` | Book an appointment |
 | `POST /api/odoro/appointments/{id}/cancel` | Cancel existing appointment |
-| `PUT /api/odoro/appointments/{id}/reschedule | Reschedule existing appointment |
+| `PUT /api/odoro/appointments/{id}/reschedule` | Reschedule existing appointment |
 
 Configuration is in `src/services/odoroService.js`.
 
