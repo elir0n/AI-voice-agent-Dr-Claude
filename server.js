@@ -9,9 +9,10 @@ import ffmpegPath from "ffmpeg-static";
 import { v4 as uuidv4 } from "uuid";
 import { generateAvailableAppointments } from "./src/services/appointmentService.js";
 import { saveLog, getLogs } from "./src/services/logService.js";
-import { agentPrompt } from "./src/rules/agentRules.js";
+import { agentPrompt } from "./src/rules/agentPrompt.js";
 import { detectLanguage } from "./src/utils/languageDetection.js";
 import { textToSpeech } from "./src/services/ttsService.js";
+import { OdoroService } from "./src/services/odoroService.js"; // ✅
 
 dotenv.config();
 const app = express();
@@ -30,10 +31,10 @@ const upload = multer({ dest: `${UPLOAD_DIR}/` });
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const PORT = process.env.PORT || 3000;
 
-// 🧠 זיכרון זמני לשיחות פעילות
+// 🧠 ניהול שיחות פעילות
 const sessions = new Map();
 
-// 🧹 ניקוי sessions לא פעילים (כל 3 דקות)
+// 🧹 ניקוי sessions לא פעילים כל 3 דקות
 setInterval(() => {
   const now = Date.now();
   for (const [id, session] of sessions.entries()) {
@@ -46,22 +47,27 @@ setInterval(() => {
 }, 60 * 1000);
 
 // 📅 הצגת תורים לדוגמה
-app.get("/appointments", (req, res) => {
-  const data = generateAvailableAppointments();
-  res.json(data);
-});
-
+app.get("/appointments", (req, res) => res.json(generateAvailableAppointments()));
 // 📜 הצגת לוגים
-app.get("/logs", (req, res) => {
-  const rows = getLogs();
-  res.json(rows);
-});
+app.get("/logs", (req, res) => res.json(getLogs()));
 
-// 🎤 נקודת הקלט הקולית הראשית
+// 🧭 זיהוי intent בסיסי
+function detectIntent(text) {
+  const lower = text.toLowerCase();
+  if (lower.includes("לקבוע") || lower.includes("תור חדש") || lower.includes("book"))
+    return "book_appointment";
+  if (lower.includes("לבטל") || lower.includes("לא להגיע") || lower.includes("cancel"))
+    return "cancel_appointment";
+  if (lower.includes("לשנות") || lower.includes("להקדים") || lower.includes("reschedule"))
+    return "reschedule_appointment";
+  return "general";
+}
+
+// 🎤 נקודת הכניסה הראשית לשיחות קוליות
 app.post("/voice", upload.single("audio"), async (req, res) => {
   const inputPath = req.file.path;
   const outputPath = `${inputPath}.mp3`;
-  const sessionId = req.body.sessionId || uuidv4(); // ✅ מזהה ייחודי לכל שיחה
+  const sessionId = req.body.sessionId || uuidv4();
 
   try {
     // 🎧 המרה ל-MP3
@@ -78,14 +84,13 @@ app.post("/voice", upload.single("audio"), async (req, res) => {
       file: fs.createReadStream(outputPath),
       model: "whisper-1",
     });
-
     const text = transcription.text.trim();
     console.log(`🎙️ [${sessionId}] משתמש אמר: ${text}`);
 
     // 🌍 זיהוי שפה
     const detectedLang = await detectLanguage(text);
 
-    // 🧠 ניהול שיחה לפי session
+    // 🧠 ניהול שיחה
     if (!sessions.has(sessionId)) {
       sessions.set(sessionId, {
         messages: [
@@ -100,12 +105,48 @@ app.post("/voice", upload.single("audio"), async (req, res) => {
     session.messages.push({ role: "user", content: text });
     session.lastActive = Date.now();
 
-    // 🤖 פנייה ל-GPT
+    // 🧭 זיהוי intent
+    const intent = detectIntent(text);
+    console.log(`🧠 Intent detected: ${intent}`);
+
+    // 🧩 פעולות לפי intent
+    if (intent === "book_appointment") {
+      const slots = await OdoroService.getAvailability();
+      const free = slots.slots.filter(s => s.status === "free").slice(0, 3);
+      const slotList = free.map(s => s.start.slice(11, 16)).join(", ");
+      const reply = `יש תורים פנויים ביום ${slots.date} בשעות ${slotList}. באיזו שעה נוח לך?`;
+
+      const audioBuffer = await textToSpeech(reply);
+      saveLog({ sessionId, language: detectedLang, userText: text, reply, inputAudio: inputPath });
+      res.setHeader("Content-Type", "audio/mpeg");
+      return res.send(audioBuffer);
+    }
+
+    if (intent === "cancel_appointment") {
+      const reply = "אוקיי, אני מבטל את התור שלך. האם תרצה לקבוע תור חדש במקום?";
+      const audioBuffer = await textToSpeech(reply);
+      saveLog({ sessionId, language: detectedLang, userText: text, reply, inputAudio: inputPath });
+      res.setHeader("Content-Type", "audio/mpeg");
+      return res.send(audioBuffer);
+    }
+
+    if (intent === "reschedule_appointment") {
+      const slots = await OdoroService.getAvailability();
+      const alt = slots.slots.filter(s => s.status === "free").slice(0, 2);
+      const altList = alt.map(s => s.start.slice(11, 16)).join(", ");
+      const reply = `אין בעיה. יש תורים חלופיים בשעות ${altList}. איזה מהם נוח לך יותר?`;
+
+      const audioBuffer = await textToSpeech(reply);
+      saveLog({ sessionId, language: detectedLang, userText: text, reply, inputAudio: inputPath });
+      res.setHeader("Content-Type", "audio/mpeg");
+      return res.send(audioBuffer);
+    }
+
+    // 🤖 אין intent ברור → נשלח ל-GPT
     const completion = await client.chat.completions.create({
       model: "gpt-4o",
       messages: session.messages,
     });
-
     const reply = completion.choices[0].message.content.trim();
     console.log(`🤖 [${sessionId}] GPT: ${reply}`);
     session.messages.push({ role: "assistant", content: reply });
@@ -114,8 +155,6 @@ app.post("/voice", upload.single("audio"), async (req, res) => {
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const responseAudioPath = `${RESPONSES_DIR}/response_${timestamp}.mp3`;
     const responseTextPath = `${RESPONSES_DIR}/response_${timestamp}.txt`;
-
-    // 🔊 Text → Speech
     const audioBuffer = await textToSpeech(reply, outputPath);
 
     fs.writeFileSync(responseAudioPath, audioBuffer);
@@ -124,15 +163,7 @@ app.post("/voice", upload.single("audio"), async (req, res) => {
       `🕓 ${new Date().toLocaleString("he-IL")}\n🌐 שפה: ${detectedLang}\n🎤 משתמש: ${text}\n🤖 GPT: ${reply}\n-------------------------------------\n`,
       { encoding: "utf-8" }
     );
-
-    saveLog({
-      sessionId,
-      language: detectedLang,
-      userText: text,
-      reply,
-      inputAudio: inputPath,
-      outputAudio: responseAudioPath,
-    });
+    saveLog({ sessionId, language: detectedLang, userText: text, reply, inputAudio: inputPath, outputAudio: responseAudioPath });
 
     res.setHeader("Content-Type", "audio/mpeg");
     res.send(audioBuffer);

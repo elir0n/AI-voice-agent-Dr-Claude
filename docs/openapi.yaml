@@ -1,0 +1,177 @@
+openapi: 3.0.1
+info:
+  title: Odoro Appointment Management API (Dr. Claude Picard)
+  version: 1.2.3
+  description: >
+    Secure REST API for managing medical appointments for Dr. Claude Picard's clinics.
+    Supports booking, cancellation, rescheduling and availability checks.
+servers:
+  - url: https://api.odoro.com/v1
+    description: Production server
+  - url: https://staging.odoro.com/v1
+    description: Staging environment
+  - url: http://localhost:4000/api/odoro
+    description: Local mock server
+tags:
+  - name: Appointments
+    description: Manage patient appointments
+  - name: Availability
+    description: Retrieve available time slots
+  - name: Patients
+    description: Search and manage patients
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Appointment:
+      type: object
+      properties:
+        id: { type: string, example: "appt_34952" }
+        slot_id: { type: string, example: "slot_2025-11-20_09_00" }
+        patient:
+          type: object
+          properties:
+            id: { type: string, example: "p_123" }
+            name: { type: string, example: "Yossi Cohen" }
+            phone: { type: string, example: "+972500000000" }
+        reason: { type: string, example: "כאבים בברך" }
+        status: { type: string, example: "confirmed" }
+        created_at: { type: string, format: date-time }
+        provider: { type: string, example: "Dr. Claude Picard" }
+
+security:
+  - bearerAuth: []
+
+paths:
+  /availability:
+    get:
+      tags: [Availability]
+      summary: Get available time slots
+      parameters:
+        - name: date
+          in: query
+          required: false
+          schema: { type: string, example: "2025-11-20" }
+        - name: clinic_id
+          in: query
+          required: false
+          schema: { type: string, example: "clinic_1" }
+      responses:
+        "200":
+          description: Available time slots
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  date: { type: string }
+                  slots:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        start: { type: string }
+                        end: { type: string }
+                        provider: { type: string }
+                        status: { type: string }
+
+  /appointments:
+    post:
+      tags: [Appointments]
+      summary: Book a new appointment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Appointment'
+      responses:
+        "201":
+          description: Appointment booked successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+
+  /appointments/{id}/cancel:
+    post:
+      tags: [Appointments]
+      summary: Cancel existing appointment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: "appt_34952" }
+      responses:
+        "200":
+          description: Appointment cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  appointment:
+                    $ref: '#/components/schemas/Appointment'
+
+  /appointments/{id}/reschedule:
+    post:
+      tags: [Appointments]
+      summary: Reschedule appointment to a new time
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: "appt_34952" }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                new_slot_id: { type: string, example: "slot_2025-11-20_10_00" }
+      responses:
+        "200":
+          description: Appointment rescheduled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+
+  /patients:
+    get:
+      tags: [Patients]
+      summary: Search patients by name or phone
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema: { type: string, example: "Yossi" }
+      responses:
+        "200":
+          description: Matching patient records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        name: { type: string }
+                        phone: { type: string }
+                        dob: { type: string }

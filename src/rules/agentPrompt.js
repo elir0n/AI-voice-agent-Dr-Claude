@@ -113,4 +113,6 @@ export const agentPrompt = `
 - השיחה צריכה להיות יעילה, נעימה ועם מטרה ברורה: קביעת תור.
 
 ---
+${behaviorRules}
+${conversationExamples}
 `;

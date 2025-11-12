@@ -1,0 +1,86 @@
+{
+  "info": {
+    "name": "Odoro Appointment API (Dr. Claude Picard)",
+    "description": "API endpoints for managing appointments, availability, and patient data.",
+    "version": "1.2.3",
+    "_postman_id": "b3a1-odoro-prod-api",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{ODORO_API_KEY}}", "type": "string" }
+    ]
+  },
+  "item": [
+    {
+      "name": "Get Availability",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/availability?date=2025-11-20&clinic_id=clinic_1",
+          "host": ["{{base_url}}"],
+          "path": ["availability"],
+          "query": [
+            { "key": "date", "value": "2025-11-20" },
+            { "key": "clinic_id", "value": "clinic_1" }
+          ]
+        },
+        "header": [{ "key": "Authorization", "value": "Bearer {{ODORO_API_KEY}}" }]
+      }
+    },
+    {
+      "name": "Book Appointment",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{ODORO_API_KEY}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"patient\": {\"name\": \"Yossi Cohen\", \"phone\": \"+972500000000\"},\n  \"slot_id\": \"slot_2025-11-20_09_00\",\n  \"reason\": \"כאבים בברך\"\n}"
+        },
+        "url": { "raw": "{{base_url}}/appointments", "host": ["{{base_url}}"], "path": ["appointments"] }
+      }
+    },
+    {
+      "name": "Cancel Appointment",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{ODORO_API_KEY}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": { "raw": "{{base_url}}/appointments/appt_34952/cancel", "host": ["{{base_url}}"], "path": ["appointments", "appt_34952", "cancel"] }
+      }
+    },
+    {
+      "name": "Reschedule Appointment",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{ODORO_API_KEY}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"new_slot_id\": \"slot_2025-11-20_10_00\"\n}"
+        },
+        "url": { "raw": "{{base_url}}/appointments/appt_34952/reschedule", "host": ["{{base_url}}"], "path": ["appointments", "appt_34952", "reschedule"] }
+      }
+    },
+    {
+      "name": "Search Patients",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{ODORO_API_KEY}}" }],
+        "url": { "raw": "{{base_url}}/patients?query=Yossi", "host": ["{{base_url}}"], "path": ["patients"], "query": [{ "key": "query", "value": "Yossi" }] }
+      }
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "https://api.odoro.com/v1" },
+    { "key": "ODORO_API_KEY", "value": "demo_key_123" }
+  ]
+}
