@@ -48,7 +48,9 @@ Patients can call the clinic, speak naturally, and the AI will:
 
 ---
 
-## 🧠 Project Structure
+# 🧠 Project Structure
+
+```bash
 AI-voice-agent-Dr-Claude/
 ├── src/
 │   ├── services/
@@ -76,7 +78,6 @@ AI-voice-agent-Dr-Claude/
 ├── server.js
 ├── package.json
 └── README.md
-
 
 
 ---
